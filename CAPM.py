@@ -2,24 +2,34 @@
 import pandas as pd
 import holidays
 import yfinance as yf
+import matplotlib.pyplot as plt
 from datetime import datetime
 from pandas_datareader import data as pdr
+from sklearn.linear_model import LinearRegression
 pd.plotting.register_matplotlib_converters()
 
-# import sklearn.metrics
-# from scipy.stats import stats
-# import matplotlib.pyplot as plt
 # import seaborn as sns
-# from pulp import *
 # import numpy as np
-# from sklearn.metrics import mean_squared_error
-# import statsmodels.api as sm
 
 # date range: 2002-2015
 
 yf.pdr_override()
 
-us_holidays = pd.DataFrame(holidays.US(years=range(2002,2016)).items(),
+# List of chosen assets to analyse
+# price of asset of 5 american companies - research subject
+# Microsoft Corporation (MSFT) - IT business
+# The Procter & Gamble Company (PG) - cosmetic business
+# Pfizer Inc. (PFE) - pharmaceutical business
+# Walmart Inc. (WMT) - supermarket business
+# Harley-Davidson, Inc. (HOG) - automotive business
+assets_dict = {'MSFT': 'Microsoft Corporation',
+               'PG': 'The Procter & Gamble Company',
+               'PFE': 'Pfizer Inc.',
+               'WMT': 'Walmart Inc',
+               'HOG': 'Harley-Davidson, Inc.'}
+
+# List of holidays occurring between 2002 and 2016
+us_holidays = pd.DataFrame(holidays.US(years=range(2002, 2016)).items(),
                            columns=['date', 'holiday'])
 holidays_list = us_holidays['date'].to_list()
 
@@ -39,8 +49,10 @@ def prepare_data_frame(name):
     asset.reset_index(inplace=True)
 
     # Count daily returns
-    if name != '^IRX': asset['Value'] = ((1 + asset['Adj Close'])**(1/250) - 1) * asset['Volume']
-    else: asset['Value'] = asset['Adj Close']
+    if name != '^IRX':
+        asset['Value'] = ((1 + asset['Adj Close'])**(1/250) - 1) * asset['Volume']
+    else:
+        asset['Value'] = asset['Adj Close']
     temp = asset['Value'].iloc[:-1].to_list()
     asset = asset.iloc[1:]
     name = 'Daily returns' + ' ' + name
@@ -54,126 +66,68 @@ sp500 = prepare_data_frame('^GSPC')
 
 # 13 Week Treasury Bill (^IRX) - free-risk investment
 treasury = prepare_data_frame('^IRX')
-treasury_a = pdr.get_data_yahoo('^IRX', start='2002-01-01', end='2016-01-01')
-print(treasury_a.to_markdown())
 
 # Create main dataFrame with market risk premium
 main_dataFrame = pd.merge(sp500, treasury, how='inner', on='Date')
 main_dataFrame['Market Risk Premium'] = main_dataFrame['Daily returns ^GSPC'] - main_dataFrame['Daily returns ^IRX']
 main_dataFrame = main_dataFrame[['Date', 'Daily returns ^IRX', 'Market Risk Premium']]
-main_dataFrame.rename(columns={'Daily returns ^IRX':'Risk free investment'}, inplace=True)
+main_dataFrame.rename(columns={'Daily returns ^IRX': 'Risk free investment'}, inplace=True)
 main_dataFrame = main_dataFrame[main_dataFrame['Risk free investment'] > -10]
 
 
-def create_capm(asset):
+# Creat model
+def create_capm(asset, stats_asset, name):
+    model = LinearRegression(fit_intercept=True)
+    x = asset['Market Risk Premium'].array.reshape(-1, 1)
+    y = asset.iloc[:, 3] - asset['Risk free investment']
+    results = model.fit(x, y)
+    y_pred = model.predict(x)
+
+    # Collect stats
+    stats_asset.loc[name] = [results.coef_, results.intercept_, results.score(x, y) * 100]
+
+    return stats_asset, y_pred
+
+
+# Table with stats
+stats_dataFrame = pd.DataFrame(columns=['Beta', 'Intercept', 'R^2'])
+
+
+# Display results of capm
+def result_capm(asset, name):
     asset = pd.merge(main_dataFrame, asset, how='inner', on='Date')
-    return asset
+
+    # Split into two sets, before and after 2009
+    asset_2009 = asset[asset['Date'] < datetime.strptime('2009-01-01', '%Y-%m-%d').date()]
+    asset_2015 = asset[asset['Date'] >= datetime.strptime('2009-01-01', '%Y-%m-%d').date()]
+
+    stats_asset = pd.DataFrame(columns=['Beta', 'Intercept', 'R^2'])
+    stats_asset, y_pred_2009 = create_capm(asset_2009, stats_asset, name + ' 2009')
+    stats_asset, y_pred_2015 = create_capm(asset_2015, stats_asset, name + ' 2015')
+
+    global stats_dataFrame
+    stats_dataFrame = pd.concat([stats_dataFrame, stats_asset])
+
+    # Visualise dependence on a plot
+    plt.plot(asset_2009['Market Risk Premium'], y_pred_2009, color='black')
+    plt.plot(asset_2015['Market Risk Premium'], y_pred_2015, color="blue")
+    plt.legend(['2009', '2015'])
+    plt.title(name)
+    plt.show()
+
+    # plt.plot(asset_2009['Market Risk Premium'], y_pred_2009 + asset_2009['Risk free investment'], color='black')
+    # plt.plot(asset_2015['Market Risk Premium'], y_pred_2015 + asset_2015['Risk free investment'], color="blue")
+    # plt.legend(['2009', '2015'])
+    # plt.title(name)
+    # plt.show()
 
 
-# price of asset of 5 american companies - research subject
-# Microsoft Corporation (MSFT) - IT business
-msft = prepare_data_frame('MSFT')
-msft = create_capm(msft)
-
-# The Procter & Gamble Company (PG) - cosmetic business
-pg = prepare_data_frame('PG')
-
-# Pfizer Inc. (PFE) - pharmaceutical business
-pfe = prepare_data_frame('PFE')
-
-# Walmart Inc. (WMT) - supermarket business
-wmt = prepare_data_frame('WMT')
-
-# Harley-Davidson, Inc. (HOG) - automotive business
-hog = prepare_data_frame('HOG')
-
-# print(msft.to_markdown())
-
-# msft_2009 = msft[msft['Date'] < datetime.strptime('2009-01-01', '%Y-%m-%d').date()]
-
-# Plots
-# sns.lineplot(data=msft['Risk free investment'])
-# plt.show()
-# plt.scatter(msft['Date'], msft['Daily returns MSFT'], color='g')
-# plt.show()
-
-# Plot outputs
-# plt.scatter(diabetes_X_test, diabetes_y_test, color="black")
-# plt.plot(diabetes_X_test, diabetes_y_pred, color="blue", linewidth=3)
-# plt.xticks(())
-# plt.yticks(())
-# plt.show()
-
-# msft['Close'].plot(label = 'MSFT', figsize=(10,8))
-# sp500['Close'].plot(label = 'SPY')
-# plt.legend()
-
-# Conclusion and questions
-# 2014-09-22 daily return:-4
-# 2009-11-19 risk free:-5
+def analyse_asset(abr, name):
+    result_capm(prepare_data_frame(abr), name)
 
 
-# Creating model
+for key in assets_dict.keys():
+    analyse_asset(key, assets_dict[key])
 
-# 1st attitude
-# from scipy.optimize import minimize
-#
-# def model(params, X):
-#     alpha = params[0]
-#     y_pred = msft['Risk free investment'] + X*alpha
-#     return y_pred
-#
-# def sum_of_squares(params, X, Y):
-#     y_pred = model(params, X)
-#     obj = np.sqrt(((y_pred - Y) ** 2).sum()/len(Y))
-#     return obj
-#
-# alpha_0 = 0.1
-#
-# res = minimize(sum_of_squares, [alpha_0, ], args=(msft['Market Risk Premium'], msft['Daily returns MSFT']),
-#                tol=1e-3, method="Powell")
-# print(res)
-#
-# y_pred = model(res['x'], msft['Market Risk Premium'])
-#
-# print(sklearn.metrics.r2_score(msft['Daily returns MSFT'], y_pred))
-#
-# plt.scatter(msft['Market Risk Premium'], msft['Daily returns MSFT'], color="black")
-# plt.plot(msft['Market Risk Premium'], y_pred, color="blue", linewidth=3)
-# plt.show()
+print(stats_dataFrame.to_markdown())
 
-# 2nd attitude
-# x = msft[['Risk free investment', 'Market Risk Premium']]
-# y = msft['Daily returns MSFT']
-# x = sm.add_constant(x)
-# model = sm.OLS(y, x).fit()
-# predictions = model.predict(x)
-# print_model = model.summary()
-# print(print_model)
-# plt.scatter(msft['Market Risk Premium'], msft['Daily returns MSFT'], color="black")
-# plt.plot(msft['Market Risk Premium'], predictions, color="blue", linewidth=3)
-# plt.show()
-
-# 3rd attitude
-# x = msft['Market Risk Premium']
-# y = msft['Daily returns MSFT']
-# x = sm.add_constant(x)
-# model = sm.OLS(y, x).fit()
-# predictions = model.predict(x)
-# print_model = model.summary()
-# print(print_model)
-# plt.scatter(msft['Date'], msft['Daily returns MSFT'], color="black")
-# plt.plot(msft['Date'], predictions, color="blue", linewidth=3)
-# plt.show()
-
-# 4th attitude
-# from sklearn.linear_model import LinearRegression
-# model = LinearRegression(fit_intercept=True)
-# x = msft['Market Risk Premium'].array.reshape(-1, 1)
-# y = msft['Daily returns MSFT'] - msft['Risk free investment']
-# reg = model.fit(x, y)
-# print(reg.intercept_, reg.coef_, reg.score(x, y))
-# y_pred = model.predict(x)
-# plt.scatter(x, y, color='black')
-# plt.plot(x, y_pred, color="blue", linewidth=3)
-# plt.show()
