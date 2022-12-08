@@ -46,7 +46,7 @@ def prepare_data_frame(name):
 def create_capm(asset, stats_asset, name):
     model = LinearRegression(fit_intercept=True)
     x = asset['Market Risk Premium'].array.reshape(-1, 1)
-    y = asset['y']
+    y = asset['corrected y']
     results = model.fit(x, y)
     y_pred = model.predict(x)
 
@@ -58,7 +58,7 @@ def create_capm(asset, stats_asset, name):
 
 def conduct_chowtest(asset, name, n):
     print(name)
-    res_chow = chow_test(asset['y'], asset['Market Risk Premium'], n - 1, n, 0.01)
+    res_chow = chow_test(asset['corrected y'], asset['Market Risk Premium'], n - 1, n, 0.01)
     p = round(res_chow[1], 4)
 
     # Save to pdf
@@ -78,8 +78,8 @@ def conduct_chowtest(asset, name, n):
 def result_analyse(asset, name):
     asset = pd.merge(main_dataFrame, asset, how='inner', on='Date')
 
-    # Create y by subtracting 'Risk free investment' to gain linear function
-    asset['y'] = asset.iloc[:, 3] - asset['Risk free investment']
+    # Create corrected expected return on investment by subtracting 'Risk free investment' to gain linear function
+    asset['corrected y'] = asset.iloc[:, 3] - asset['Risk free investment']
 
     # Split into two sets, before and after 2009
     asset_2009 = asset[asset['Date'] < datetime.strptime('2009-01-01', '%Y-%m-%d').date()]
@@ -99,62 +99,100 @@ def result_analyse(asset, name):
         round(stats_asset.iloc[0, 1], 2))
     function_2015 = '2015: y = ' + str(round(stats_asset.iloc[1, 0][0], 2)) + 'x ' + str(
         round(stats_asset.iloc[1, 1], 2))
-    pdf.set_font('Arial', '', 12)
-    pdf.cell(w=0, h=10, txt=function_2009, ln=1, align='L')
-    pdf.cell(w=0, h=10, txt=function_2015, ln=1, align='L')
 
-    # Visualise dependence on a plot
+    # Visualise Capital Market Line comparison - 2002-2009 and 2009-2015
     fig_1 = plt.figure()
-    plt.plot(asset_2009['Market Risk Premium'], y_pred_2009, color='black')
-    plt.plot(asset_2015['Market Risk Premium'], y_pred_2015, color="darkviolet")
+    plt.plot(asset_2009['Market Risk Premium'], y_pred_2009, color='darkviolet')
+    plt.plot(asset_2015['Market Risk Premium'], y_pred_2015, color="pink")
     plt.legend([function_2009, function_2015])
-    plt.title(name)
+    plt.title('Capital Market Line comparison')
     plt.show()
     fig_1.savefig('./results/chart_mrp_' + name + '.png',
                   transparent=False,
                   facecolor='white',
                   bbox_inches="tight")
-    pdf.image('./results/chart_mrp_' + name + '.png',
-              x=50, y=None, w=100, h=0, type='PNG')
 
-    fig_2 = plt.figure()
-    plt.plot(asset['Date'], np.append(y_pred_2009, y_pred_2015), color='darkviolet')
-    plt.scatter(asset['Date'], asset['y'], color='black', linewidths=0.1)
-    plt.legend(['estimated', 'observed'])
-    plt.title(name)
-    plt.show()
-    fig_2.savefig('./results/chart_date_' + name + '.png',
-                  transparent=False,
-                  facecolor='white',
-                  bbox_inches="tight")
-    pdf.image('./results/chart_date_' + name + '.png',
-              x=50, y=None, w=100, h=0, type='PNG')
-
-    fig_3, axs = plt.subplots(2)
-    fig_3.suptitle(name)
+    # Visualise Capital Market Line and observed values
+    fig_2, axs = plt.subplots(2)
+    fig_2.suptitle('Capital Market Line and observed values')
     axs[0].plot(asset_2009['Market Risk Premium'], y_pred_2009, color='darkviolet', label='estimated')
-    axs[0].scatter(asset_2009['Market Risk Premium'], asset_2009['y'], color='black', linewidths=0.1, label='observed')
+    axs[0].scatter(asset_2009['Market Risk Premium'], asset_2009['corrected y'], color='black', linewidths=0.1, label='observed')
     axs[0].set_title('2009')
-    axs[1].plot(asset_2015['Market Risk Premium'], y_pred_2015, color='darkviolet', label='estimated')
-    axs[1].scatter(asset_2015['Market Risk Premium'], asset_2015['y'], color='black', linewidths=0.1, label='observed')
+    axs[1].plot(asset_2015['Market Risk Premium'], y_pred_2015, color='pink', label='estimated')
+    axs[1].scatter(asset_2015['Market Risk Premium'], asset_2015['corrected y'], color='black', linewidths=0.1, label='observed')
     axs[1].set_title('2015')
     handles, labels = plt.gca().get_legend_handles_labels()
-    fig_3.legend(handles, labels, loc='upper right')
+    fig_2.legend(handles, labels, loc='upper right')
     plt.show()
-    fig_3.savefig('./results/charts_two_' + name + '.png',
+    fig_2.savefig('./results/charts_two_' + name + '.png',
                   transparent=False,
                   facecolor='white',
                   bbox_inches="tight")
+
+    # Visualise corrected asset price's changes in time and compare the observed and predicted values
+    fig_3 = plt.figure()
+    plt.plot(asset['Date'], np.append(y_pred_2009, len(y_pred_2015) * [None]), color='darkviolet')
+    plt.plot(asset['Date'], np.append(len(y_pred_2009) * [None], y_pred_2015), color='pink')
+    plt.scatter(asset['Date'], asset['corrected y'], color='black', linewidths=0.1)
+    plt.legend(['estimated 2009', 'estimated 2015', 'observed'])
+    plt.title('Corrected return on investment in time')
+    plt.show()
+    fig_3.savefig('./results/chart_date_' + name + '.png',
+                  transparent=False,
+                  facecolor='white',
+                  bbox_inches="tight")
+
+    # Save to pdf
+    pdf.image('./results/chart_mrp_' + name + '.png',
+              x=0, y=None, w=100, h=0, type='PNG')
+
+    pdf.set_font('Arial', '', 12)
+    pdf.cell(w=0, h=10, txt="CAPM characteristics:", ln=1, align='L')
+    pdf.cell(w=20, h=10, txt="Year", border=1, ln=0, align='C')
+    pdf.cell(w=20, h=10, txt="Beta", border=1, ln=0, align='C')
+    pdf.cell(w=20, h=10, txt="Intercept", border=1, ln=0, align='C')
+    pdf.cell(w=20, h=10, txt="R^2", border=1, ln=1, align='C')
+    for i in range(0, 2):
+        pdf.cell(w=20, h=10,
+                 txt="year",
+                 border=1, ln=0, align='C')
+        pdf.cell(w=20, h=10,
+                 txt=str(round(stats_asset['Beta'].iloc[i][0], 2)),
+                 border=1, ln=0, align='C')
+        pdf.cell(w=20, h=10,
+                 txt=str(round(stats_asset['Intercept'].iloc[i], 2)),
+                 border=1, ln=0, align='C')
+        pdf.cell(w=20, h=10,
+                 txt=str(round(stats_asset['R^2'].iloc[i], 2)),
+                 border=1, ln=1, align='C')
+
+    pdf.image('./results/chart_date_' + name + '.png',
+              x=0, y=None, w=100, h=0, type='PNG')
+
     pdf.image('./results/charts_two_' + name + '.png',
-              x=50, y=None, w=100, h=0, type='PNG')
+              x=0, y=None, w=100, h=0, type='PNG')
 
     # Chow test
-    conduct_chowtest(asset, name, len(asset_2009['y']))
+    conduct_chowtest(asset, name, len(asset_2009['corrected y']))
 
 
 def analyse_asset(abr, name):
     result_analyse(prepare_data_frame(abr), name)
 
+
+# Create pdf
+pdf = FPDF()
+pdf.add_page()
+pdf.set_font('Arial', 'B', 28)
+pdf.cell(w=0, h=10, txt="Report of CAPM analysis", ln=1, align='C')
+pdf.set_font('Arial', 'I', 14)
+pdf.cell(w=0, h=10, txt="author: Alicja Smaruj", ln=1, align='C')
+pdf.set_font('Arial', 'I', 14)
+today = date.today()
+pdf.cell(w=0, h=10, txt="date: " + today.strftime("%d %B %Y"), ln=1, align='C')
+pdf.ln(8)
+pdf.set_font('Arial', '', 12)
+pdf.cell(w=0, h=10, txt="Chosen assets: ", ln=1, align='L')
 
 # List of holidays occurring between 2002 and 2016
 us_holidays = pd.DataFrame(holidays.US(years=range(2002, 2016)).items(),
@@ -185,20 +223,7 @@ assets_dict = {'MSFT': 'Microsoft Corporation',
                'WMT': 'Walmart Inc',
                'HOG': 'Harley-Davidson, Inc.'}
 
-# Create pdf
-pdf = FPDF()
-pdf.add_page()
-pdf.set_font('Arial', 'B', 28)
-pdf.cell(w=0, h=10, txt="Report of CAPM analysis", ln=1, align='C')
-pdf.set_font('Arial', 'I', 14)
-pdf.cell(w=0, h=10, txt="author: Alicja Smaruj", ln=1, align='C')
-pdf.set_font('Arial', 'I', 14)
-today = date.today()
-pdf.cell(w=0, h=10, txt="date: " + today.strftime("%d %B %Y"), ln=1, align='C')
-pdf.ln(8)
-pdf.set_font('Arial', '', 12)
-pdf.cell(w=0, h=10, txt="Chosen assets: ", ln=1, align='L')
-
+# Save to pdf
 for key in assets_dict.keys():
     pdf.cell(w=0, h=10, txt='- ' + assets_dict[key], ln=1, align='L')
 
@@ -211,11 +236,40 @@ for key in assets_dict.keys():
     # Analyse asset
     analyse_asset(key, assets_dict[key])
 
+# Print stats table
+print(stats_dataFrame.to_markdown())
+
+# Save to pdf
 pdf.cell(w=0, h=10, txt='', ln=1, align='L')
 pdf.set_font('Arial', 'U', 14)
 pdf.cell(w=0, h=10, txt='Summary', ln=1, align='L')
-# TODO table to pdf
-print(stats_dataFrame.to_markdown())
+pdf.set_font('Arial', '', 12)
+pdf.cell(w=60, h=10, txt="Year", border=1, ln=0, align='C')
+pdf.cell(w=20, h=10, txt="Beta", border=1, ln=0, align='C')
+pdf.cell(w=20, h=10, txt="Intercept", border=1, ln=0, align='C')
+pdf.cell(w=20, h=10, txt="R^2", border=1, ln=1, align='C')
+for i in range(0, len(stats_dataFrame)):
+    pdf.cell(w=60, h=10,
+             txt="year",
+             border=1, ln=0, align='C')
+    pdf.cell(w=20, h=10,
+             txt=str(round(stats_dataFrame['Beta'].iloc[i][0], 2)),
+             border=1, ln=0, align='C')
+    pdf.cell(w=20, h=10,
+             txt=str(round(stats_dataFrame['Intercept'].iloc[i], 2)),
+             border=1, ln=0, align='C')
+    pdf.cell(w=20, h=10,
+             txt=str(round(stats_dataFrame['R^2'].iloc[i], 2)),
+             border=1, ln=1, align='C')
 
+pdf.cell(w=0, h=10, txt=' ', ln=1, align='L')
+pdf.set_font('Arial', 'I', 10)
+pdf.cell(w=0, h=10, txt='*Corrected return of investment = return of investment - risk free investment', ln=1, align='L')
+pdf.cell(w=0, h=10, txt='This procedure was necessary to estimated linear regression function.', ln=1, align='L')
+
+# Close pdf file
 pdf.output(f'./results/report.pdf', 'F')
+
+# TODO name in tables not years
+# TODO Fix placement of the plots
 
