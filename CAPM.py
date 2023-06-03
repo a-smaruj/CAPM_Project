@@ -1,4 +1,5 @@
 # imports
+import math
 import numpy as np
 import pandas as pd
 import holidays
@@ -135,7 +136,7 @@ def result_analyse(asset, name):
     plt.plot(asset['Date'], np.append(len(y_pred_2009) * [None], y_pred_2015), color='pink')
     plt.scatter(asset['Date'], asset['corrected y'], color='black', linewidths=0.1)
     plt.legend(['estimated 2009', 'estimated 2015', 'observed'])
-    plt.title('Corrected return on investment in time')
+    plt.title('Corrected return on investment* in time')
     plt.show()
     fig_3.savefig('./results/chart_date_' + name + '.png',
                   transparent=False,
@@ -144,7 +145,8 @@ def result_analyse(asset, name):
 
     # Save to pdf
     pdf.image('./results/chart_mrp_' + name + '.png',
-              x=0, y=None, w=100, h=0, type='PNG')
+              x=5, y=None, w=100, h=0, type='PNG')
+    pdf.cell(w=0, h=10, txt="", ln=1, align='L')
 
     pdf.set_font('Arial', '', 12)
     pdf.cell(w=0, h=10, txt="CAPM characteristics:", ln=1, align='L')
@@ -153,8 +155,12 @@ def result_analyse(asset, name):
     pdf.cell(w=20, h=10, txt="Intercept", border=1, ln=0, align='C')
     pdf.cell(w=20, h=10, txt="R^2", border=1, ln=1, align='C')
     for i in range(0, 2):
+        if i == 0:
+            year_txt = "2009"
+        else:
+            year_txt = "2015"
         pdf.cell(w=20, h=10,
-                 txt="year",
+                 txt=year_txt,
                  border=1, ln=0, align='C')
         pdf.cell(w=20, h=10,
                  txt=str(round(stats_asset['Beta'].iloc[i][0], 2)),
@@ -166,11 +172,14 @@ def result_analyse(asset, name):
                  txt=str(round(stats_asset['R^2'].iloc[i], 2)),
                  border=1, ln=1, align='C')
 
+    pdf.cell(w=0, h=10, txt="", ln=1, align='L')
+
     pdf.image('./results/chart_date_' + name + '.png',
-              x=0, y=None, w=100, h=0, type='PNG')
+              x=5, y=None, w=100, h=0, type='PNG')
+    pdf.cell(w=0, h=10, txt="", ln=1, align='L')
 
     pdf.image('./results/charts_two_' + name + '.png',
-              x=0, y=None, w=100, h=0, type='PNG')
+              x=5, y=None, w=100, h=0, type='PNG')
 
     # Chow test
     conduct_chowtest(asset, name, len(asset_2009['corrected y']))
@@ -244,13 +253,18 @@ pdf.cell(w=0, h=10, txt='', ln=1, align='L')
 pdf.set_font('Arial', 'U', 14)
 pdf.cell(w=0, h=10, txt='Summary', ln=1, align='L')
 pdf.set_font('Arial', '', 12)
-pdf.cell(w=60, h=10, txt="Year", border=1, ln=0, align='C')
+pdf.cell(w=100, h=10, txt="Year", border=1, ln=0, align='C')
 pdf.cell(w=20, h=10, txt="Beta", border=1, ln=0, align='C')
 pdf.cell(w=20, h=10, txt="Intercept", border=1, ln=0, align='C')
 pdf.cell(w=20, h=10, txt="R^2", border=1, ln=1, align='C')
 for i in range(0, len(stats_dataFrame)):
-    pdf.cell(w=60, h=10,
-             txt="year",
+    if i % 2 == 0:
+        year_txt = "2009"
+    else:
+        year_txt = "2015"
+    key_txt = list(assets_dict.keys())
+    pdf.cell(w=100, h=10,
+             txt=assets_dict[key_txt[math.ceil((i+1) / 2) - 1]] + " " + year_txt,
              border=1, ln=0, align='C')
     pdf.cell(w=20, h=10,
              txt=str(round(stats_dataFrame['Beta'].iloc[i][0], 2)),
@@ -269,7 +283,4 @@ pdf.cell(w=0, h=10, txt='This procedure was necessary to estimated linear regres
 
 # Close pdf file
 pdf.output(f'./results/report.pdf', 'F')
-
-# TODO name in tables not years
-# TODO Fix placement of the plots
 
