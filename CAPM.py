@@ -1,4 +1,5 @@
 # imports
+import os
 import math
 import numpy as np
 import pandas as pd
@@ -13,11 +14,15 @@ from fpdf import FPDF
 pd.plotting.register_matplotlib_converters()
 yf.pdr_override()
 
-# date range: 2002-2015
+# Check if directory path exists
+isExist = os.path.exists('./results/')
+if not isExist:
+    os.makedirs('./results/')
 
 
 def prepare_data_frame(name):
     # Download needed data
+    # date range: 2002-2015
     asset = pdr.get_data_yahoo(name, start='2002-01-01', end='2016-01-01')
 
     # Data cleaning

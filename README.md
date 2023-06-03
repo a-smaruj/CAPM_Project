@@ -2,7 +2,7 @@
 
 ## General
 
-The main idea is to create Capital Asset Pricing Model based on data from [https://finance.yahoo.com/](https://finance.yahoo.com/) and compare the values of beta of investment before and after 2008-2009 Global Financial Crisis. All results are collected in a generated pdf report in results folder.
+The main idea is to create Capital Asset Pricing Model based on data from [https://finance.yahoo.com/](https://finance.yahoo.com/) and compare the values of beta of investment before and after 2008-2009 Global Financial Crisis. All results are collected in a generated pdf report in <code>results</code> folder.
 
 ## Used data
 
